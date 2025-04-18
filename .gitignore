@@ -1,0 +1,10 @@
+# modules
+node_modules
+bun.lock
+
+# protected
+db
+.env
+
+# mac conf
+.DS_Store

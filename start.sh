@@ -1,0 +1,1 @@
+npx tsx --env-file=.env gamma/main.js
