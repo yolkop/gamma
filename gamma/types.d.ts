@@ -5,6 +5,10 @@ declare global {
             PORTS: string;
             PASSWORDS: string;
             ANTI_DELETE_ON: string;
+            AES_KEY: string;
+            AES_IV: string;
+            CW_INTERVAL: string;
+            ACC_INTERVAL: string;
         }
     }
 }

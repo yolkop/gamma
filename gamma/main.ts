@@ -6,8 +6,8 @@ import { Worker } from 'node:worker_threads';
 
 import { WebSocketServer } from 'ws';
 
-import Handler from './handler.js';
-import { DatabaseAccount, Stats } from './types.js';
+import Handler from './handler';
+import { DatabaseAccount, Stats } from './types';
 
 if (!process.env.PROXY_URL) throw new Error('PROXY_URL is not set. Please set it in the .env file.');
 
@@ -74,7 +74,7 @@ if (cluster.isPrimary) {
                 const acc = accountQueue.shift();
                 if (acc) cwWorker.send(acc);
             }
-        }, 200);
+        }, Number(process.env.CW_INTERVAL) || 1000);
     }, 1000);
 
     setInterval(() => socketWorker.send(handler.stats), 1000);
@@ -84,6 +84,8 @@ if (cluster.isPrimary) {
     let stats: Stats;
 
     const runSocketWorker = () => {
+        const handler = new Handler();
+
         const nodes = process.env.PORTS.split(',').map((port) => parseInt(port.trim()));
         const passwords = process.env.PASSWORDS.split(',').map((password) => password.trim());
 
@@ -91,6 +93,8 @@ if (cluster.isPrimary) {
             const wss = new WebSocketServer({ port });
 
             wss.on('connection', (ws) => {
+                let isAuthorized = false;
+
                 ws.on('message', (msg) => {
                     try {
                         const message = msg.toString();
@@ -98,8 +102,20 @@ if (cluster.isPrimary) {
 
                         const data = JSON.parse(message);
 
-                        if (data.type === 'auth' && data.code === passwords[i])
+                        if (data.type === 'auth' && data.code === passwords[i]) {
+                            isAuthorized = true;
                             ws.send(JSON.stringify({ type: 'stats', stats }));
+                        }
+
+                        if (data.type === 'info' && data.email && isAuthorized) {
+                            const entry = handler.getEncodedAccount(data.email);
+                            ws.send(JSON.stringify({ type: 'info', entry }));
+                        }
+
+                        if (data.type === 'accounts' && data.item && isAuthorized) {
+                            const accounts = handler.getAccountsWithItem(data.item);
+                            ws.send(JSON.stringify({ type: 'accounts', accounts }));
+                        }
                     } catch (e) {
                         console.error(e);
                     }

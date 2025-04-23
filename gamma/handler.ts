@@ -3,9 +3,17 @@ import path from 'node:path';
 
 import { findItemById } from 'yolkbot/constants';
 
+import { decrypt, encrypt } from './encoding';
+
 import { DatabaseAccount, Stats } from './types.d';
 
 const isAntiDelete = parseInt(process.env.ANTI_DELETE_ON) == 1;
+
+const databaseDir = path.join(import.meta.dirname, 'db');
+const databasePath = path.join(databaseDir, 'accounts.json');
+const lastDayPath = path.join(databaseDir, 'dayTick.txt');
+
+const dayTick = () => Math.floor((Date.now() - new Date(Date.UTC(2025, 3, 21)).getTime()) / (1000 * 60 * 60 * 24));
 
 class Handler {
     stats: Stats = {
@@ -15,13 +23,14 @@ class Handler {
         bigEggAccounts: {}
     }
 
-    maskEmail(email: string) {
-        const [localPart, domain] = email.split('@');
-        const maskedLocalPart = localPart.slice(0, 2) + '*'.repeat(localPart.length - 2);
-        return `${maskedLocalPart}@${domain}`;
-    }
+    constructor(noStats: boolean = false) {
+        if (fs.readFileSync(lastDayPath, 'utf8') != dayTick().toString()) {
+            fs.cpSync(databasePath, path.join(databaseDir, `accounts-backup-${dayTick().toString()}.json`), { force: true });
+            fs.writeFileSync(lastDayPath, dayTick().toString());
+        }
 
-    constructor() {
+        if (noStats) return;
+
         const accounts = this.getAccounts();
 
         this.stats.numAccounts = accounts.length;
@@ -35,7 +44,7 @@ class Handler {
             });
 
             this.stats.eggs += account.eggs || 0;
-            if (account.eggs >= 100000) this.stats.bigEggAccounts[this.maskEmail(account.email)] = account.eggs;
+            if (account.eggs >= 100000) this.stats.bigEggAccounts[encrypt(account.email.split('@')[0])] = account.eggs;
         }
 
         console.log('compiled initial stats! global eggs:', this.stats.eggs.toLocaleString(), '/ accounts:', this.stats.numAccounts, '/ items:', Object.values(this.stats.items).reduce((sum, count) => sum + count, 0));
@@ -45,7 +54,7 @@ class Handler {
         return JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'db', 'accounts.json'), 'utf8'));
     }
 
-    #write(db: DatabaseAccount[]) {
+    write(db: DatabaseAccount[]) {
         fs.writeFileSync(path.join(import.meta.dirname, 'db', 'accounts.json'), JSON.stringify(db, null, 4));
     }
 
@@ -56,7 +65,7 @@ class Handler {
 
         this.stats.numAccounts++;
 
-        this.#write(db);
+        this.write(db);
     }
 
     getAccounts() {
@@ -71,10 +80,10 @@ class Handler {
             account.eggs += pull.eggs;
             this.stats.eggs += pull.eggs;
 
-            if (pull.eggs >= 100000) this.stats.bigEggAccounts[this.maskEmail(account.email)] = account.eggs;
+            if (pull.eggs >= 100000) this.stats.bigEggAccounts[encrypt(account.email.split('@')[0])] = account.eggs;
         } else console.log('[!] cannot find account for', pull.email);
 
-        this.#write(db);
+        this.write(db);
     }
 
     pulledItem(pull: { email: string; tier: number; item: number }) {
@@ -93,7 +102,7 @@ class Handler {
         if (!this.stats.items[formedItemName]) this.stats.items[formedItemName] = 1;
         else this.stats.items[formedItemName]++;
 
-        this.#write(db);
+        this.write(db);
     }
 
     delete(pull: { email: string }) {
@@ -103,7 +112,7 @@ class Handler {
         if (account) account.isBroken = true;
         else console.log('[!] cannot find account for', pull.email);
 
-        this.#write(db);
+        this.write(db);
     }
 
     update(data: { email: string; canPlayAgain: number }) {
@@ -113,7 +122,23 @@ class Handler {
         if (account) account.canPlayAgain = data.canPlayAgain;
         else console.log('something seems to have happened', data);
 
-        this.#write(db);
+        this.write(db);
+    }
+
+    getEncodedAccount(encoded: string) {
+        const db = this.#fetch();
+
+        const decodedEmail = decrypt(encoded) + '@gmail.com';
+        const account = db.find((acc: DatabaseAccount) => acc.email === decodedEmail);
+
+        return account;
+    }
+
+    getAccountsWithItem(item: string) {
+        const db = this.#fetch();
+
+        const accounts = db.filter((acc: DatabaseAccount) => acc.items[item] >= 1);
+        return accounts.slice(0, 10);
     }
 }
 

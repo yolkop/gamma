@@ -1,1 +1,1 @@
-npx tsx --env-file=.env gamma/main.js
+npx tsx --env-file=.env gamma/main.ts

@@ -173,7 +173,7 @@ class AccountWorker {
         if (this.isAntiDelete) this.create(email, password);
         else this.createNoVerify(email, password);
 
-        await new Promise((r) => setTimeout(r, (this.isFirstCycle && this.isAntiDelete) ? 3000 : 500));
+        await new Promise((r) => setTimeout(r, (this.isFirstCycle && this.isAntiDelete) ? 3000 : (Number(process.env.ACC_INTERVAL) || 1000)));
         this.isFirstCycle = false;
         this.cycle();
     }
