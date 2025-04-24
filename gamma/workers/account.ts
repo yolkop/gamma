@@ -167,7 +167,7 @@ class AccountWorker {
 
         this.done++;
 
-        const email = names[Math.random() * names.length | 0] + Math.random().toString(36).substring(2, 8) + '@gmail.com';
+        const email = names[Math.random() * names.length | 0] + Math.random().toString(36).substring(2, 8) + '@' + process.env.EMAIL_DOMAIN;
         const password = Math.random().toString(36).substring(2, 10);
 
         if (this.isAntiDelete) this.create(email, password);

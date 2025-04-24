@@ -9,7 +9,11 @@ import { WebSocketServer } from 'ws';
 import Handler from './handler';
 import { DatabaseAccount, Stats } from './types';
 
-if (!process.env.PROXY_URL) throw new Error('PROXY_URL is not set. Please set it in the .env file.');
+if (!process.env.PROXY_URL) {
+    console.log('\u001b[33m[!] Gamma has never been tested without proxies.\u001b[0m');
+    console.log('\u001b[33m[!] There is a high chance that issues will arise.\u001b[0m');
+    console.log('\u001b[33m[!] I HIGHLY recommend you add a PROXY_URL to the .env file.\u001b[0m');
+}
 
 const dbPath = path.join(import.meta.dirname, 'db');
 if (!fs.existsSync(dbPath)) fs.mkdirSync(dbPath);
@@ -86,40 +90,35 @@ if (cluster.isPrimary) {
     const runSocketWorker = () => {
         const handler = new Handler();
 
-        const nodes = process.env.PORTS.split(',').map((port) => parseInt(port.trim()));
-        const passwords = process.env.PASSWORDS.split(',').map((password) => password.trim());
+        const wss = new WebSocketServer({ port: Number(process.env.PORT) });
 
-        nodes.forEach((port, i) => {
-            const wss = new WebSocketServer({ port });
+        wss.on('connection', (ws) => {
+            let isAuthorized = false;
 
-            wss.on('connection', (ws) => {
-                let isAuthorized = false;
+            ws.on('message', (msg) => {
+                try {
+                    const message = msg.toString();
+                    if (!message.startsWith('{') || !message.endsWith('}')) return;
 
-                ws.on('message', (msg) => {
-                    try {
-                        const message = msg.toString();
-                        if (!message.startsWith('{') || !message.endsWith('}')) return;
+                    const data = JSON.parse(message);
 
-                        const data = JSON.parse(message);
-
-                        if (data.type === 'auth' && data.code === passwords[i]) {
-                            isAuthorized = true;
-                            ws.send(JSON.stringify({ type: 'stats', stats }));
-                        }
-
-                        if (data.type === 'info' && data.email && isAuthorized) {
-                            const entry = handler.getEncodedAccount(data.email);
-                            ws.send(JSON.stringify({ type: 'info', entry }));
-                        }
-
-                        if (data.type === 'accounts' && data.item && isAuthorized) {
-                            const accounts = handler.getAccountsWithItem(data.item);
-                            ws.send(JSON.stringify({ type: 'accounts', accounts }));
-                        }
-                    } catch (e) {
-                        console.error(e);
+                    if (data.type === 'auth' && data.code === process.env.PASSWORD) {
+                        isAuthorized = true;
+                        ws.send(JSON.stringify({ type: 'stats', stats }));
                     }
-                })
+
+                    if (data.type === 'info' && data.email && isAuthorized) {
+                        const entry = handler.getEncodedAccount(data.email);
+                        ws.send(JSON.stringify({ type: 'info', entry }));
+                    }
+
+                    if (data.type === 'accounts' && data.item && isAuthorized) {
+                        const accounts = handler.getAccountsWithItem(data.item);
+                        ws.send(JSON.stringify({ type: 'accounts', accounts }));
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
             })
         })
     }

@@ -2,11 +2,16 @@ declare global {
     namespace NodeJS {
         interface ProcessEnv {
             PROXY_URL: string;
-            PORTS: string;
-            PASSWORDS: string;
+
             ANTI_DELETE_ON: string;
+            EMAIL_DOMAIN: string;
+
+            PORT: string;
+            PASSWORD: string;
+
             AES_KEY: string;
             AES_IV: string;
+
             CW_INTERVAL: string;
             ACC_INTERVAL: string;
         }
