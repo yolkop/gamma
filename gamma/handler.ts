@@ -31,7 +31,13 @@ class Handler {
 
         if (noStats) return;
 
-        const accounts = this.getAccounts();
+        this.compileStats();
+
+        console.log('compiled initial stats! global eggs:', this.stats.eggs.toLocaleString(), '/ accounts:', this.stats.numAccounts, '/ items:', Object.values(this.stats.items).reduce((sum, count) => sum + count, 0));
+    }
+
+    compileStats() {
+        const accounts = this.#fetch();
 
         this.stats.numAccounts = accounts.length;
 
@@ -46,8 +52,6 @@ class Handler {
             this.stats.eggs += account.eggs || 0;
             if (account.eggs >= 100000) this.stats.bigEggAccounts[encrypt(account.email.split('@')[0])] = account.eggs;
         }
-
-        console.log('compiled initial stats! global eggs:', this.stats.eggs.toLocaleString(), '/ accounts:', this.stats.numAccounts, '/ items:', Object.values(this.stats.items).reduce((sum, count) => sum + count, 0));
     }
 
     #fetch(): DatabaseAccount[] {
