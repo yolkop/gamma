@@ -135,7 +135,6 @@ class AccountWorker {
     isFirstCycle = true;
 
     constructor() {
-        console.log('account worker has started');
         this.cycle();
     }
 
@@ -158,7 +157,7 @@ class AccountWorker {
 
     async createNoVerify(email: string, password: string) {
         let account = await createAccount(email, password, process.env.PROXY_URL, 'egg.dance');
-        if (typeof account === 'object' && (account.id || account.playerOutput.id)) parentPort && parentPort.postMessage({ email, password });
+        if (typeof account === 'object' && account.playerOutput.id) parentPort && parentPort.postMessage({ email, password });
         else console.log('account error', account);
     }
 

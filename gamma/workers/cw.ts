@@ -1,8 +1,9 @@
 import { parentPort } from 'node:worker_threads';
 
 import Bot from 'yolkbot/bot';
+import { findItemById } from 'yolkbot/constants';
 
-console.log('cw worker has started');
+import logger from '../log.ts';
 
 interface XBot extends Bot {
     isBroken?: boolean;
@@ -11,17 +12,10 @@ interface XBot extends Bot {
 const runOn = async (bot: XBot) => {
     if (!parentPort || bot.isBroken) return;
 
-    console.log('playing chikn winner...');
     const result = await bot.playChiknWinner(false);
-    console.log('played chikn winner', result);
-
-    /*
-        egg format -> { email: 'example@gmail.com', type: 'eggs', eggs: 696969 }
-        item format -> { email: 'example@gmail.com', type: 'item', tier: 2, item: 'StateFarm Stamp' }
-    */
 
     if (result === 'session_expired') {
-        console.log('session_expired was called - going to flag it as isBroken:', bot.account.email);
+        logger.red('session_expired was called - going to flag it as isBroken:', bot.account);
 
         bot.isBroken = true;
 
@@ -41,18 +35,28 @@ const runOn = async (bot: XBot) => {
         })
     }
 
-    if (result.eggsGiven > 0) parentPort.postMessage({
-        email: bot.account.email,
-        type: 'eggs',
-        eggs: result.eggsGiven
-    });
+    if (result.eggsGiven > 0) {
+        logger.yellow('[cw]', result.eggsGiven + ' eggs');
 
-    if (result.itemIds && result.itemIds.length) parentPort.postMessage({
-        email: bot.account.email,
-        type: 'item',
-        tier: result.rewardTier,
-        item: result.itemIds[0]
-    });
+        parentPort.postMessage({
+            email: bot.account.email,
+            type: 'eggs',
+            eggs: result.eggsGiven
+        });
+    }
+
+    if (result.itemIds && result.itemIds.length) {
+        const givenItem = findItemById(result.itemIds[0]).name;
+
+        logger[result.rewardTier > 4 ? 'orange' : 'cyan']('[cw]', `[T${result.rewardTier}] ${givenItem}`);
+
+        parentPort.postMessage({
+            email: bot.account.email,
+            type: 'item',
+            tier: result.rewardTier,
+            item: givenItem,
+        });
+    }
 
     parentPort.postMessage({
         type: 'update',
@@ -64,10 +68,8 @@ const runOn = async (bot: XBot) => {
 parentPort && parentPort.on('message', async (account) => {
     const bot = new Bot({ proxy: process.env.PROXY_URL, instance: 'egg.dance' });
 
-    // @ts-expect-error i dont care
-    delete bot.game;
-    // @ts-expect-error i still dont care
-    delete bot.me;
+    // @ts-expect-error these props are supposed to always exist, but we do GC
+    delete bot.game && delete bot.me;
 
     await bot.login(account.email, account.password);
 

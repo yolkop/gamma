@@ -1,11 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { findItemById } from 'yolkbot/constants';
+import { decrypt, encrypt } from './encoding.ts';
 
-import { decrypt, encrypt } from './encoding';
-
-import { DatabaseAccount, Stats } from './types.d';
+import type { DatabaseAccount, Stats } from './types.d.ts';
 
 const isAntiDelete = parseInt(process.env.ANTI_DELETE_ON) == 1;
 
@@ -52,6 +50,8 @@ class Handler {
             this.stats.eggs += account.eggs || 0;
             if (account.eggs >= 100000) this.stats.bigEggAccounts[encrypt(account.email.split('@')[0])] = account.eggs;
         }
+
+        return this.stats;
     }
 
     #fetch(): DatabaseAccount[] {
@@ -65,7 +65,16 @@ class Handler {
     addAccount(credentials: { email: string; password: string }) {
         const db = this.#fetch();
 
-        db.push({ ...credentials, eggs: 0, items: {}, canPlayAgain: 0, isAntiDelete });
+        db.push({
+            email: credentials.email,
+            password: credentials.password,
+
+            eggs: 0,
+            items: {},
+
+            canPlayAgain: 0,
+            isAntiDelete
+        });
 
         this.stats.numAccounts++;
 
@@ -90,13 +99,13 @@ class Handler {
         this.write(db);
     }
 
-    pulledItem(pull: { email: string; tier: number; item: number }) {
+    pulledItem(pull: { email: string; tier: number; item: string }) {
         const db = this.#fetch();
 
         const account = db.find((acc: DatabaseAccount) => acc.email == pull.email);
         if (!account) return console.log('[!] cannot find account for', pull.email);
 
-        const formedItemName = `[T${pull.tier}] ${findItemById(pull.item).name}`;
+        const formedItemName = `[T${pull.tier}] ${pull.item}`;
 
         if (!account.items) account.items = {};
 

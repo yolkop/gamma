@@ -4,15 +4,14 @@ import path from 'node:path';
 import process from 'node:process';
 import { Worker } from 'node:worker_threads';
 
-import { WebSocketServer } from 'ws';
-
-import Handler from './handler';
-import { DatabaseAccount, Stats } from './types';
+import Handler from './handler.ts';
+import logger from './log.ts';
+import type { DatabaseAccount } from './types.d.ts';
 
 if (!process.env.PROXY_URL) {
-    console.log('\u001b[33m[!] Gamma has never been tested without proxies.\u001b[0m');
-    console.log('\u001b[33m[!] There is a high chance that issues will arise.\u001b[0m');
-    console.log('\u001b[33m[!] I HIGHLY recommend you add a PROXY_URL to the .env file.\u001b[0m');
+    logger.red('[!] Gamma has never been tested without proxies.');
+    logger.red('[!] There is a high chance that issues will arise.');
+    logger.red('[!] I HIGHLY recommend you add a PROXY_URL to the .env file.');
 }
 
 const dbPath = path.join(import.meta.dirname, 'db');
@@ -22,20 +21,22 @@ const accountPath = path.join(dbPath, 'accounts.json');
 if (!fs.existsSync(accountPath)) fs.writeFileSync(accountPath, '[]');
 
 if (cluster.isPrimary) {
+    logger.magenta('[init] started gamma @', new Date().toLocaleString());
+
     const handler = new Handler();
 
     const accountWorker = cluster.fork(process.env);
     const cwWorker = cluster.fork(process.env);
-    const socketWorker = cluster.fork(process.env);
 
-    socketWorker.on('message', (message: string) => {
-        if (message === 'ready') socketWorker.send('socketWorker');
-    });
+    logger.magenta('[init] forked clusters, processes running')
 
     accountWorker.on('message', async (account: DatabaseAccount | string) => {
-        if (typeof account === 'string') return accountWorker.send('accountWorker');
+        if (typeof account === 'string') {
+            logger.magenta('[init] account worker ready');
+            return accountWorker.send('accountWorker');
+        }
 
-        console.log('account verified successfully (party face):', account.email);
+        logger.green('[acc] account sent up:', process.env.LOG_EMAILS === '1' ? account.email : '[hidden]');
 
         handler.addAccount(account);
         cwWorker.send(account);
@@ -45,23 +46,26 @@ if (cluster.isPrimary) {
         email: string;
         type: string;
         eggs: number;
-        item: number;
+        item: string;
         tier: number;
         canPlayAgain: number;
     }
 
     cwWorker.on('message', async (pull: Pull | string) => {
-        if (typeof pull === 'string') return cwWorker.send('cwWorker');
+        if (typeof pull === 'string') {
+            logger.magenta('[init] cw worker ready');
+            return cwWorker.send('cwWorker');
+        }
 
         if (pull.type == 'eggs') handler.pulledEggs(pull);
         else if (pull.type == 'item') handler.pulledItem(pull);
         else if (pull.type == 'delete') handler.delete(pull);
         else if (pull.type === 'update') handler.update(pull);
-        else console.log('unknown pull type??', pull.type, pull);
+        else logger.red('[!] unknown pull type??', pull.type, pull);
     });
 
     setTimeout(() => {
-        console.log('assuming everything is done, posting messages');
+        logger.magenta('[init] alright, lets get this show on the road...');
 
         const accountQueue: DatabaseAccount[] = [];
 
@@ -80,63 +84,19 @@ if (cluster.isPrimary) {
             }
         }, Number(process.env.CW_INTERVAL) || 1000);
     }, 1000);
-
-    setInterval(() => socketWorker.send(handler.stats), 1000);
 } else if (process.send) {
     process.send('ready');
 
-    let stats: Stats;
-
-    const runSocketWorker = () => {
-        const handler = new Handler();
-
-        const wss = new WebSocketServer({ port: Number(process.env.PORT) });
-
-        wss.on('connection', (ws) => {
-            let isAuthorized = false;
-
-            ws.on('message', (msg) => {
-                try {
-                    const message = msg.toString();
-                    if (!message.startsWith('{') || !message.endsWith('}')) return;
-
-                    const data = JSON.parse(message);
-
-                    if (data.type === 'auth' && data.code === process.env.PASSWORD) {
-                        isAuthorized = true;
-                        ws.send(JSON.stringify({ type: 'stats', stats }));
-                    }
-
-                    if (data.type === 'info' && data.email && isAuthorized) {
-                        const entry = handler.getEncodedAccount(data.email);
-                        ws.send(JSON.stringify({ type: 'info', entry }));
-                    }
-
-                    if (data.type === 'accounts' && data.item && isAuthorized) {
-                        const accounts = handler.getAccountsWithItem(data.item);
-                        ws.send(JSON.stringify({ type: 'accounts', accounts }));
-                    }
-                } catch (e) {
-                    console.error(e);
-                }
-            })
-        })
-    }
-
     let designatedWorker: Worker, myRole: string;
 
-    process.on('message', async (message: Stats | string) => {
+    process.on('message', async (message: any) => {
         if (!myRole && typeof message === 'string') {
             myRole = message;
 
-            console.log(`worker ${process.pid} has been assigned ${myRole}`)
-
             if (myRole === 'accountWorker') designatedWorker = new Worker(path.join(import.meta.dirname, 'workers', 'account.ts'));
             if (myRole === 'cwWorker') designatedWorker = new Worker(path.join(import.meta.dirname, 'workers', 'cw.ts'));
-            if (myRole === 'socketWorker') return runSocketWorker();
 
             designatedWorker.on('message', (message) => process.send && process.send(message));
         } else if (designatedWorker) designatedWorker.postMessage(message);
-        else if (myRole === 'socketWorker' && typeof message === 'object') stats = message as Stats;
     });
 }

@@ -14,6 +14,8 @@ declare global {
 
             CW_INTERVAL: string;
             ACC_INTERVAL: string;
+
+            LOG_EMAILS: string;
         }
     }
 }

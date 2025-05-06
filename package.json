@@ -3,19 +3,20 @@
     "author": "1ust",
     "type": "module",
     "devDependencies": {
-        "@eslint/js": "^9.25.1",
+        "@eslint/js": "^9.26.0",
         "@stylistic/eslint-plugin": "^4.2.0",
-        "@types/node": "^22.14.1",
+        "@types/bun": "^1.2.12",
+        "@types/node": "^22.15.12",
         "@types/ws": "^8.18.1",
-        "eslint": "^9.25.1",
-        "globals": "^15.15.0",
-        "tsx": "^4.19.3"
+        "eslint": "^9.26.0",
+        "globals": "^16.0.0"
     },
     "scripts": {
         "lint": "eslint --fix"
     },
     "dependencies": {
-        "ws": "^8.18.1",
-        "yolkbot": "0.1.2-alpha.28"
+        "enquirer": "^2.4.1",
+        "tsx": "^4.19.4",
+        "yolkbot": "^0.1.4"
     }
 }

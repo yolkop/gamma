@@ -5,6 +5,7 @@ bun.lock
 # protected
 db
 .env
+.env.backup
 
 # mac conf
 .DS_Store
